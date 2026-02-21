@@ -1,0 +1,22 @@
+{
+    "formBuilder.name": "Name",
+    "formBuilder.status": "Status",
+    "formBuilder.description": "Description",
+    "formBuilder.tableTitle": "Forms ({count})",
+    "formBuilder.actions.create": "Create New Form",
+    "formBuilder.actions.edit": "Edit",
+    "formBuilder.actions.view": "View",
+    "formBuilder.actions.delete": "Delete",
+    "formBuilder.actions.save": "Save",
+    "formBuilder.actions.submit": "Submit",
+    "formBuilder.actions.back": "Back",
+    "formBuilder.tabs.design": "Design",
+    "formBuilder.createForm": "Create Form",
+    "formBuilder.actions.createEntry": "Create New Entry",
+    "formBuilder.fields.id": "ID",
+    "formBuilder.fields.createdAt": "Created At",
+    "formBuilder.noData": "No data entries found.",
+    "formBuilder.editForm": "Edit Form: {name}",
+    "deleteFormDialog.title": "Delete Form",
+    "deleteFormDialog.message": "Are you sure you want to delete {name}?"
+}
