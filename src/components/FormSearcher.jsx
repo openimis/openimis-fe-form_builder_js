@@ -28,9 +28,10 @@ const FormSearcher = (props) => {
     );
     const [filters, setFilters] = useState({});
     const [formToDelete, setFormToDelete] = useState(null);
+    // Remove skip:true so the query actually runs and fetches forms from the backend
     const { data, isLoading, error, refetch } = useFormDefinitionsQuery(
         { filters },
-        { skip: true, keepStale: true }
+        {}
     );
     const deleteMutation = useFormDefinitionDeleteMutation();
 
@@ -96,7 +97,7 @@ const FormSearcher = (props) => {
     const itemFormatters = useCallback((filters) => {
         return [
             (f) => f.name,
-            (f) => f.status,
+            (f) => f.formType,
             (f) => f.description,
             (f) => (
                 <StyledHorizontalButtonContainer>
@@ -124,7 +125,7 @@ const FormSearcher = (props) => {
         {
             label: formatMessage("formBuilder.actions.create", "Create"),
             icon: <AddIcon />,
-            authorized: true, // TODO: add specific right check if needed later, openIMIS handles this per module config generally
+            authorized: true,
             onClick: onCreate,
         },
     ];

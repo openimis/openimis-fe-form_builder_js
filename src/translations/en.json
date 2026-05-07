@@ -16,6 +16,8 @@
     "formBuilder.fields.id": "ID",
     "formBuilder.fields.createdAt": "Created At",
     "formBuilder.noData": "No data entries found.",
+    "formBuilder.errorLoading": "Error loading form definition.",
+    "formBuilder.actions.confirmDelete": "Are you sure you want to delete this entry?",
     "formBuilder.editForm": "Edit Form: {name}",
     "deleteFormDialog.title": "Delete Form",
     "deleteFormDialog.message": "Are you sure you want to delete {name}?"

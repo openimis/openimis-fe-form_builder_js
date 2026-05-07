@@ -1,6 +1,7 @@
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import SaveIcon from "@mui/icons-material/Save";
-import { Button, Grid, Paper, Typography } from "@mui/material";
+import { Button, Fab, Grid, Paper, Typography } from "@mui/material";
+import { styled } from "@mui/material/styles";
 import { combine, historyPush, useModulesManager, useTranslations, withHistory } from "@openimis/fe-core";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -12,13 +13,10 @@ import {
 import FormDesignPanel from "./FormDesignPanel";
 import FormMetadataPanel from "./FormMetadataPanel";
 
-import { Fab } from "@mui/material";
-import { styled } from "@mui/material/styles";
-
 const StyledPage = styled("div")(({ theme }) => ({
     ...theme.page ?? {},
     padding: theme.spacing(3),
-    position: "relative", // For FAB positioning
+    position: "relative",
 }));
 
 const StyledFab = styled(Fab)(({ theme }) => ({
@@ -34,19 +32,20 @@ const FormDesigner = (props) => {
     const modulesManager = useModulesManager();
     const { formatMessage } = useTranslations("formBuilder", modulesManager);
 
-    // TODO: Add proper rights check
     const canEdit = true;
+
+    // uuid from useParams is "new" when navigating to /form-builder/new
+    // treat "new" (or missing) as create mode; only existing uuids as edit mode
+    const isEditing = !!uuid && uuid !== 'new';
 
     const [edited, setEdited] = useState({});
     const [isLoaded, setIsLoaded] = useState(false);
 
-    const { isLoading, error, data } = useFormDefinitionQuery(
-        uuid,
-        { skip: !uuid }
+    const { isLoading, data } = useFormDefinitionQuery(
+        isEditing ? uuid : null,
+        { skip: !isEditing }
     );
 
-    // const createMutation = useFormDefinitionCreateMutation();
-    // const updateMutation = useFormDefinitionUpdateMutation();
     const createMutation = useFormDefinitionCreateMutation();
     const updateMutation = useFormDefinitionUpdateMutation();
 
@@ -55,7 +54,7 @@ const FormDesigner = (props) => {
     }, [uuid]);
 
     useEffect(() => {
-        if (!uuid && !isLoaded) {
+        if (!isEditing && !isLoaded) {
             setEdited({
                 name: "",
                 description: "",
@@ -65,11 +64,11 @@ const FormDesigner = (props) => {
                 targetModel: "",
             });
             setIsLoaded(true);
-        } else if (uuid && !isLoading && data && !isLoaded) {
+        } else if (isEditing && !isLoading && data && !isLoaded) {
             setEdited(data);
             setIsLoaded(true);
         }
-    }, [data, isLoading, uuid, isLoaded]);
+    }, [data, isLoading, isEditing, isLoaded]);
 
     const onSave = () => {
         const payload = {
@@ -77,27 +76,29 @@ const FormDesigner = (props) => {
             description: edited.description || "",
             formType: edited.formType || "standalone",
             entryPoint: edited.entryPoint || "",
-            schema: JSON.stringify(edited.schema || []),
+            schema: typeof edited.schema !== 'string' ? JSON.stringify(edited.schema || []) : edited.schema,
             targetModel: edited.targetModel || "",
         };
-        const variables = uuid ? { uuid, ...payload } : { ...payload };
-        const mutation = uuid ? updateMutation : createMutation;
 
-        mutation.mutate(
-            variables,
-            {
-                onSuccess: (result) => {
-                    if (result) {
-                        historyPush(modulesManager, history, "formBuilder.list");
-                    }
-                },
-                onError: (e) => {
-                    console.error("Save failed:", e);
-                },
-            }
-        );
+        if (isEditing) {
+            // Pass edited.id (relay global ID returned by the backend query) for update
+            updateMutation.mutate(
+                { id: edited.id, ...payload },
+                {
+                    onSuccess: () => historyPush(modulesManager, history, "formBuilder.list"),
+                    onError: (e) => console.error("Update failed:", e),
+                }
+            );
+        } else {
+            createMutation.mutate(
+                payload,
+                {
+                    onSuccess: () => historyPush(modulesManager, history, "formBuilder.list"),
+                    onError: (e) => console.error("Create failed:", e),
+                }
+            );
+        }
     };
-
 
     return (
         <StyledPage>
@@ -113,8 +114,8 @@ const FormDesigner = (props) => {
                     </Grid>
                     <Grid item>
                         <Typography variant="h5">
-                            {uuid
-                                ? formatMessage("formBuilder.editForm", { name: edited.name })
+                            {isEditing
+                                ? formatMessage("formBuilder.editForm", { name: edited.name || "" })
                                 : formatMessage("formBuilder.createForm", "Create Form")}
                         </Typography>
                     </Grid>

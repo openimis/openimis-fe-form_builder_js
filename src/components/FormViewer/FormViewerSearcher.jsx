@@ -96,6 +96,16 @@ const FormViewerSearcher = () => {
         }
     ], [formatMessage]);
 
+    const schemaFields = formDefinition?.schema || [];
+
+    const headerActions = useMemo(() => [
+        {
+            icon: <i className="material-icons">add</i>,
+            label: formatMessage('formBuilder.actions.createEntry', 'Create Entry'),
+            action: handleCreate
+        }
+    ], [formatMessage, handleCreate]);
+
     if (schemaLoading || dataLoading) {
         return (
             <Box display="flex" justifyContent="center" p={4}>
@@ -113,16 +123,6 @@ const FormViewerSearcher = () => {
             </Box>
         );
     }
-
-    const schemaFields = formDefinition?.schema || [];
-
-    const headerActions = useMemo(() => [
-        {
-            icon: <i className="material-icons">add</i>,
-            label: formatMessage('formBuilder.actions.createEntry', 'Create Entry'),
-            action: handleCreate
-        }
-    ], [formatMessage, handleCreate]);
 
     return (
         <SearcherPane

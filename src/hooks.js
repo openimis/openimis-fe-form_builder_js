@@ -1,17 +1,32 @@
 import { useGraphqlMutation, useGraphqlQuery } from "@openimis/fe-core";
 import _ from "lodash";
-import { useCallback, useMemo, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
+import { useMemo } from "react";
 import {
     CREATE_FORM_DEFINITION,
+    CREATE_FORM_SUBMISSION,
     DELETE_FORM_DEFINITION,
+    DELETE_FORM_SUBMISSION,
     GET_FORM_CONTROLS_SCHEMA,
     GET_FORM_DEFINITION,
     GET_FORM_DEFINITIONS,
+    GET_FORM_SUBMISSION,
+    GET_FORM_SUBMISSIONS,
     UPDATE_FORM_DEFINITION,
+    UPDATE_FORM_SUBMISSION,
 } from "./queries";
 
-const LOCAL_STORAGE_KEY = "openimis_form_builder_drafts";
+// ==========================================
+// FORM DEFINITION HOOKS (backend GraphQL)
+// All queries use OrderedDjangoFilterConnectionField, so all responses are
+// connections: { edges: [{ node: ... }] }
+//
+// useGraphqlMutation pattern (from other modules like PayerModule):
+//   mutation.mutate(payload)
+//   → useGraphqlMutation adds clientMutationId to payload
+//   → sends variables = { input: payload }
+//   → $input receives payload (with clientMutationId)
+// So do NOT wrap in { input: ... } when calling mutate().
+// ==========================================
 
 export const useFormDefinitionsQuery = ({ filters }, config) => {
     const { isLoading, error, data, refetch } = useGraphqlQuery(
@@ -21,10 +36,10 @@ export const useFormDefinitionsQuery = ({ filters }, config) => {
     );
 
     const formDefinitions = useMemo(() => {
-        const backendForms = data ? _.map(data.formDefinitions?.edges, "node") : [];
+        const backendForms = data ? _.map(data.formDefinition?.edges, "node") : [];
         let allForms = [...backendForms];
 
-        // Apply frontend filter if needed
+        // Apply frontend filter fallback for servers that don't support name_Icontains
         if (filters && filters.name_Icontains) {
             const searchName = filters.name_Icontains.toLowerCase();
             allForms = allForms.filter(f => f.name && f.name.toLowerCase().includes(searchName));
@@ -34,9 +49,7 @@ export const useFormDefinitionsQuery = ({ filters }, config) => {
     }, [data, filters]);
 
     const pageInfo = useMemo(() => {
-        return data
-            ? data.formDefinitions?.pageInfo || {}
-            : {};
+        return data ? data.formDefinition?.pageInfo || {} : {};
     }, [data]);
 
     return { isLoading, error, data: { formDefinitions, pageInfo }, refetch };
@@ -50,7 +63,9 @@ export const useFormDefinitionQuery = (uuid, config) => {
     );
 
     return useMemo(() => {
-        let formDef = data?.formDefinition;
+        // GET_FORM_DEFINITION returns a connection filtered by uuid → take the first edge
+        const rawNode = data?.formDefinition?.edges?.[0]?.node || null;
+        let formDef = rawNode;
         if (formDef && typeof formDef.schema === 'string') {
             try {
                 formDef = { ...formDef, schema: JSON.parse(formDef.schema) };
@@ -58,65 +73,57 @@ export const useFormDefinitionQuery = (uuid, config) => {
                 console.error("Failed to parse backend form schema", e);
             }
         }
-
         return { isLoading, error, data: formDef, refetch };
     }, [isLoading, error, data, refetch]);
 };
 
 export const useFormDefinitionCreateMutation = () => {
-    const backendMutation = useGraphqlMutation(CREATE_FORM_DEFINITION, {
+    const mutation = useGraphqlMutation(CREATE_FORM_DEFINITION, {
         onSuccess: (data) => data?.createFormDefinition,
     });
 
     return {
-        ...backendMutation,
+        ...mutation,
         mutate: (variables, options) => {
-            const inputPayload = {
-                clientMutationId: uuidv4(),
+            // Pass payload directly; useGraphqlMutation adds clientMutationId and wraps in { input: payload }
+            const payload = {
                 ...variables,
                 schema: typeof variables.schema !== 'string' ? JSON.stringify(variables.schema) : variables.schema,
             };
-            backendMutation.mutate({ input: inputPayload }, options);
+            mutation.mutate(payload, options);
         }
     };
 };
 
 export const useFormDefinitionUpdateMutation = () => {
-    const backendMutation = useGraphqlMutation(UPDATE_FORM_DEFINITION, {
+    const mutation = useGraphqlMutation(UPDATE_FORM_DEFINITION, {
         onSuccess: (data) => data?.updateFormDefinition,
     });
 
     return {
-        ...backendMutation,
+        ...mutation,
         mutate: (variables, options) => {
-            const inputPayload = {
-                clientMutationId: uuidv4(),
+            // variables.id must be the relay global ID (from edited.id loaded via the query)
+            const payload = {
                 ...variables,
                 schema: typeof variables.schema !== 'string' ? JSON.stringify(variables.schema) : variables.schema,
             };
-            // GraphQL update schemas typically expect "id" instead of "uuid" for the PK in the input payload
-            if (inputPayload.uuid && !inputPayload.id) {
-                inputPayload.id = inputPayload.uuid;
-                delete inputPayload.uuid;
-            }
-            backendMutation.mutate({ input: inputPayload }, options);
+            // Remove uuid if present — backend expects relay global `id`, not plain uuid string
+            delete payload.uuid;
+            mutation.mutate(payload, options);
         }
     };
 };
 
 export const useFormDefinitionDeleteMutation = () => {
-    const backendMutation = useGraphqlMutation(DELETE_FORM_DEFINITION, {
+    const mutation = useGraphqlMutation(DELETE_FORM_DEFINITION, {
         onSuccess: (data) => data?.deleteFormDefinition,
     });
 
     return {
-        ...backendMutation,
+        ...mutation,
         mutate: (variables, options) => {
-            const inputPayload = {
-                clientMutationId: uuidv4(),
-                id: variables.uuid || variables.id,
-            };
-            backendMutation.mutate({ input: inputPayload }, options);
+            mutation.mutate({ id: variables.uuid || variables.id }, options);
         }
     };
 };
@@ -140,7 +147,6 @@ export const useFormControlsSchemaQuery = (config) => {
             }
         }
 
-        // Provide a full frontend fallback if the backend schema is completely missing or incomplete
         const defaultProperties = [
             { name: "name", type: "text", label: "Name" },
             { name: "label", type: "text", label: "Label" },
@@ -158,7 +164,7 @@ export const useFormControlsSchemaQuery = (config) => {
             date: { type: "date", label: "Date", properties: defaultProperties },
             boolean: { type: "boolean", label: "Boolean", properties: defaultProperties },
             select: { type: "select", label: "Dropdown", properties: selectProperties },
-            ...(parsed || {}) // override with any backend-provided schema if available
+            ...(parsed || {})
         };
 
         return fullSchema;
@@ -168,117 +174,127 @@ export const useFormControlsSchemaQuery = (config) => {
 };
 
 // ==========================================
-// DYNAMIC FORM DATA MANAGEMENT (LOCAL STORAGE)
+// FORM SUBMISSION HOOKS (backend GraphQL)
+// Replaces previous localStorage-based useFormData* hooks.
+// FormSubmission is stored on the backend linked to a FormDefinition.
 // ==========================================
 
-const getFormDataList = (formUuid) => {
-    try {
-        const key = `openimis_form_data_${formUuid}`;
-        const stored = localStorage.getItem(key);
-        return stored ? JSON.parse(stored) : [];
-    } catch (e) {
-        console.error("Error loading local form data", e);
-        return [];
-    }
+/**
+ * Parse submissionData JSON and normalise a submission node for component use.
+ */
+const normaliseSubmission = (node) => {
+    if (!node) return null;
+    const parsedData = typeof node.submissionData === 'string'
+        ? (() => { try { return JSON.parse(node.submissionData); } catch (e) { return {}; } })()
+        : (node.submissionData || {});
+    return {
+        ...node,
+        ...parsedData,
+        id: node.uuid,
+        createdAt: node.dateValidFrom,
+    };
 };
 
-const saveFormDataList = (formUuid, data) => {
-    try {
-        const key = `openimis_form_data_${formUuid}`;
-        localStorage.setItem(key, JSON.stringify(data));
-    } catch (e) {
-        console.error("Error saving local form data", e);
-    }
-};
-
-// Fetch all entries for a given form definition
+/**
+ * List all submissions for a given form definition UUID.
+ */
 export const useFormDataListQuery = (formUuid, config) => {
     const skip = config?.skip || !formUuid;
-    const [tick, setTick] = useState(0);
-    const refetch = useCallback(() => setTick(t => t + 1), []);
 
-    return useMemo(() => {
-        if (skip) return { isLoading: false, data: [], refetch };
-        return { isLoading: false, data: getFormDataList(formUuid), refetch };
-    }, [formUuid, skip, tick, refetch]);
+    const { isLoading, error, data, refetch } = useGraphqlQuery(
+        GET_FORM_SUBMISSIONS,
+        { formUuid },
+        { ...config, skip }
+    );
+
+    const entries = useMemo(() => {
+        if (!data?.formSubmission?.edges) return [];
+        return data.formSubmission.edges.map(({ node }) => normaliseSubmission(node));
+    }, [data]);
+
+    return { isLoading, error, data: entries, refetch };
 };
 
-// Fetch a single entry for a given form definition
+/**
+ * Fetch a single submission by uuid.
+ * entryId may be the submission uuid or 'new' (for create path).
+ * GET_FORM_SUBMISSION returns a connection filtered by uuid → take first edge.
+ */
 export const useFormDataQuery = (formUuid, entryId, config) => {
     const skip = config?.skip || !formUuid || !entryId || entryId === 'new';
-    const [tick, setTick] = useState(0);
-    const refetch = useCallback(() => setTick(t => t + 1), []);
 
-    return useMemo(() => {
-        if (skip) return { isLoading: false, data: null, refetch };
-        const list = getFormDataList(formUuid);
-        const item = list.find(l => l.id === entryId);
-        return { isLoading: false, data: item || null, refetch };
-    }, [formUuid, entryId, skip, tick, refetch]);
+    const { isLoading, error, data, refetch } = useGraphqlQuery(
+        GET_FORM_SUBMISSION,
+        { uuid: entryId },
+        { ...config, skip }
+    );
+
+    const entry = useMemo(() => {
+        const node = data?.formSubmission?.edges?.[0]?.node || null;
+        return normaliseSubmission(node);
+    }, [data]);
+
+    return { isLoading, error, data: entry, refetch };
 };
 
-// Create a new data entry
+/**
+ * Create a new form submission (saves to backend).
+ * variables: { formUuid: string, ...fieldValues }
+ */
 export const useFormDataCreateMutation = () => {
-    return {
-        mutate: (variables, options) => {
-            const { formUuid, ...payload } = variables;
-            const list = getFormDataList(formUuid);
+    const mutation = useGraphqlMutation(CREATE_FORM_SUBMISSION, {
+        onSuccess: (data) => data?.createFormSubmission,
+    });
 
-            const newEntry = {
-                id: uuidv4(),
-                createdAt: new Date().toISOString(),
-                ...payload
+    return {
+        ...mutation,
+        mutate: (variables, options) => {
+            const { formUuid, ...submissionData } = variables;
+            const payload = {
+                formDefinitionId: formUuid,
+                data: typeof submissionData === 'string' ? submissionData : JSON.stringify(submissionData),
+                status: 'submitted',
             };
-
-            list.push(newEntry);
-            saveFormDataList(formUuid, list);
-
-            if (options && options.onSuccess) {
-                options.onSuccess(newEntry);
-            }
+            mutation.mutate(payload, options);
         }
     };
 };
 
-// Update an existing data entry
+/**
+ * Update an existing form submission (saves to backend).
+ * variables: { formUuid: string, id: string (submission uuid), ...fieldValues }
+ */
 export const useFormDataUpdateMutation = () => {
+    const mutation = useGraphqlMutation(UPDATE_FORM_SUBMISSION, {
+        onSuccess: (data) => data?.updateFormSubmission,
+    });
+
     return {
+        ...mutation,
         mutate: (variables, options) => {
-            const { formUuid, id, ...payload } = variables;
-            const list = getFormDataList(formUuid);
-            const index = list.findIndex(l => l.id === id);
-
-            if (index > -1) {
-                list[index] = { ...list[index], ...payload, updatedAt: new Date().toISOString() };
-                saveFormDataList(formUuid, list);
-
-                if (options && options.onSuccess) {
-                    options.onSuccess(list[index]);
-                }
-            } else if (options && options.onError) {
-                options.onError(new Error("Entry not found"));
-            }
+            const { formUuid, id, ...submissionData } = variables;
+            const payload = {
+                id,
+                data: typeof submissionData === 'string' ? submissionData : JSON.stringify(submissionData),
+            };
+            mutation.mutate(payload, options);
         }
     };
 };
 
-// Delete a data entry
+/**
+ * Delete a form submission on the backend.
+ * variables: { formUuid: string, id: string (submission uuid) }
+ */
 export const useFormDataDeleteMutation = () => {
-    return {
-        mutate: (variables, options) => {
-            const { formUuid, id } = variables;
-            let list = getFormDataList(formUuid);
-            const initialLength = list.length;
-            list = list.filter(l => l.id !== id);
+    const mutation = useGraphqlMutation(DELETE_FORM_SUBMISSION, {
+        onSuccess: (data) => data?.deleteFormSubmission,
+    });
 
-            if (list.length < initialLength) {
-                saveFormDataList(formUuid, list);
-                if (options && options.onSuccess) {
-                    options.onSuccess({ success: true });
-                }
-            } else if (options && options.onError) {
-                options.onError(new Error("Entry not found"));
-            }
+    return {
+        ...mutation,
+        mutate: (variables, options) => {
+            mutation.mutate({ id: variables.id || variables.uuid }, options);
         }
     };
 };

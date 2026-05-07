@@ -1,4 +1,3 @@
-import BuildIcon from "@mui/icons-material/Build";
 import FormDesigner from "./components/FormDesigner";
 import FormRenderer from "./components/FormRenderer";
 import FormSearcher from "./components/FormSearcher";
@@ -11,7 +10,7 @@ export { FormDesigner, FormRenderer };
 const DEFAULT_CONFIG = {
     "reducers": [{ key: "formBuilder", reducer: formBuilderReducer }],
     "core.Router": [
-        { path: "form-builder", component: FormSearcher, exact: true },
+        { path: "form-builder", component: FormSearcher, exact: true, text: "Form Builder", id: "admin.formBuilder", icon: "build"},
         { path: "form-builder/:uuid?", component: FormDesigner },
         // Dynamic Data Extracted Modules
         { path: "forms/:uuid", component: FormViewerSearcher, exact: true },
@@ -19,10 +18,7 @@ const DEFAULT_CONFIG = {
     ],
     "admin.MainMenu": [
         {
-            text: "Form Builder",
-            icon: <BuildIcon />,
-            route: "/form-builder",
-            id: "admin.formBuilder",
+            route: "form-builder",
         },
     ],
     "translations": [{ key: "en", messages: messages_en }],
