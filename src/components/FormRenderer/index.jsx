@@ -68,13 +68,17 @@ const FormRenderer = () => {
         e.preventDefault();
 
         if (entryId && entryId !== 'new') {
+            // Pass the Relay global ID (base64) of the submission; the mutation
+            // hook decodes it to the integer PK expected by the backend.
             updateEntry(
-                { formUuid: uuid, id: entryId, ...formState },
+                { formUuid: uuid, id: existingEntry?.relayId, ...formState },
                 { onSuccess: () => history.replace(`/forms/${uuid}`) }
             );
         } else {
+            // Pass the Relay global ID of the form definition; the mutation
+            // hook decodes it to the integer PK expected by the backend.
             createEntry(
-                { formUuid: uuid, ...formState },
+                { formUuid: uuid, formDefinitionId: formDefinition?.id, ...formState },
                 { onSuccess: () => history.replace(`/forms/${uuid}`) }
             );
         }

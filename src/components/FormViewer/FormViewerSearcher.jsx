@@ -43,7 +43,9 @@ const FormViewerSearcher = () => {
     const handleDelete = (rowData) => {
         if (window.confirm(formatMessage("formBuilder.actions.confirmDelete", "Are you sure you want to delete this entry?"))) {
             deleteEntry(
-                { formUuid: uuid, id: rowData.id },
+                // Pass relayId (base64 Relay global ID) so the mutation hook can
+                // decode it to the integer PK expected by the backend.
+                { formUuid: uuid, relayId: rowData.relayId, id: rowData.id },
                 {
                     onSuccess: () => refetch(),
                     onError: (err) => console.error(err)
@@ -172,7 +174,7 @@ const FormViewerSearcher = () => {
                                             onClick={() => {
                                                 if (window.confirm("Are you sure?")) {
                                                     deleteEntry(
-                                                        { formUuid: uuid, id: row.id },
+                                                        { formUuid: uuid, relayId: row.relayId, id: row.id },
                                                         { onSuccess: () => refetch() }
                                                     );
                                                 }

@@ -15,6 +15,28 @@ import {
     UPDATE_FORM_SUBMISSION,
 } from "./queries";
 
+/**
+ * Decode a Relay/GraphQL global ID (base64 "TypeName:pk") and return the raw
+ * primary key string.  If the value is already a plain integer string (or any
+ * value that cannot be decoded), it is returned as-is.
+ *
+ * Example: atob("Rm9ybURlZmluaXRpb25HUUxUeXBlOjE0Nw==") → "FormDefinitionGQLType:147" → "147"
+ */
+const decodeRelayId = (relayId) => {
+    if (!relayId) return relayId;
+    try {
+        const decoded = atob(String(relayId));
+        // Relay global IDs are "TypeName:pk"
+        const colonIdx = decoded.lastIndexOf(':');
+        if (colonIdx !== -1) {
+            return decoded.slice(colonIdx + 1);
+        }
+    } catch (_e) {
+        // not base64 – return as-is
+    }
+    return relayId;
+};
+
 // ==========================================
 // FORM DEFINITION HOOKS (backend GraphQL)
 // All queries use OrderedDjangoFilterConnectionField, so all responses are
@@ -103,12 +125,15 @@ export const useFormDefinitionUpdateMutation = () => {
     return {
         ...mutation,
         mutate: (variables, options) => {
-            // variables.id must be the relay global ID (from edited.id loaded via the query)
+            // The query returns a base64-encoded Relay global ID ("TypeName:pk").
+            // The backend UpdateFormDefinitionMutation expects the raw integer pk.
+            const decodedId = parseInt(decodeRelayId(variables.id), 10);
             const payload = {
                 ...variables,
+                id: Number.isNaN(decodedId) ? variables.id : decodedId,
                 schema: typeof variables.schema !== 'string' ? JSON.stringify(variables.schema) : variables.schema,
             };
-            // Remove uuid if present — backend expects relay global `id`, not plain uuid string
+            // Remove uuid – the backend mutation uses the integer `id`, not the uuid string
             delete payload.uuid;
             mutation.mutate(payload, options);
         }
@@ -123,7 +148,11 @@ export const useFormDefinitionDeleteMutation = () => {
     return {
         ...mutation,
         mutate: (variables, options) => {
-            mutation.mutate({ id: variables.uuid || variables.id }, options);
+            // Prefer relay global ID (variables.id); fall back to uuid.
+            // The backend DeleteFormDefinitionMutation expects the integer PK.
+            const rawId = variables.id || variables.uuid;
+            const decodedId = parseInt(decodeRelayId(rawId), 10);
+            mutation.mutate({ id: Number.isNaN(decodedId) ? rawId : decodedId }, options);
         }
     };
 };
@@ -181,6 +210,9 @@ export const useFormControlsSchemaQuery = (config) => {
 
 /**
  * Parse submissionData JSON and normalise a submission node for component use.
+ * `relayId` preserves the original Relay global ID (base64) so that mutation
+ * hooks can decode it to the integer PK expected by the backend.
+ * `id` is set to the plain UUID for display / routing purposes.
  */
 const normaliseSubmission = (node) => {
     if (!node) return null;
@@ -190,7 +222,8 @@ const normaliseSubmission = (node) => {
     return {
         ...node,
         ...parsedData,
-        id: node.uuid,
+        relayId: node.id,  // base64 Relay global ID – used by mutation hooks
+        id: node.uuid,     // plain UUID – used for display and routing
         createdAt: node.dateValidFrom,
     };
 };
@@ -239,7 +272,13 @@ export const useFormDataQuery = (formUuid, entryId, config) => {
 
 /**
  * Create a new form submission (saves to backend).
- * variables: { formUuid: string, ...fieldValues }
+ * variables: {
+ *   formUuid: string,            – UUID from URL params (not used by backend)
+ *   formDefinitionId: string,    – Relay global ID of the FormDefinition (base64)
+ *   ...fieldValues
+ * }
+ * The backend CreateFormSubmissionMutation.Input.form_definition_id expects the
+ * integer PK, so we decode the Relay global ID before sending.
  */
 export const useFormDataCreateMutation = () => {
     const mutation = useGraphqlMutation(CREATE_FORM_SUBMISSION, {
@@ -249,9 +288,11 @@ export const useFormDataCreateMutation = () => {
     return {
         ...mutation,
         mutate: (variables, options) => {
-            const { formUuid, ...submissionData } = variables;
+            const { formUuid, formDefinitionId: rawFormDefId, ...submissionData } = variables;
+            // Decode Relay global ID → integer PK expected by the backend
+            const decodedId = parseInt(decodeRelayId(rawFormDefId), 10);
             const payload = {
-                formDefinitionId: formUuid,
+                formDefinitionId: Number.isNaN(decodedId) ? rawFormDefId : decodedId,
                 data: typeof submissionData === 'string' ? submissionData : JSON.stringify(submissionData),
                 status: 'submitted',
             };
@@ -262,7 +303,12 @@ export const useFormDataCreateMutation = () => {
 
 /**
  * Update an existing form submission (saves to backend).
- * variables: { formUuid: string, id: string (submission uuid), ...fieldValues }
+ * variables: {
+ *   formUuid: string,  – UUID from URL params (not used by backend)
+ *   id: string,        – Relay global ID of the FormSubmission (base64)
+ *   ...fieldValues
+ * }
+ * The backend UpdateFormSubmissionMutation.Input.id expects the integer PK.
  */
 export const useFormDataUpdateMutation = () => {
     const mutation = useGraphqlMutation(UPDATE_FORM_SUBMISSION, {
@@ -272,9 +318,11 @@ export const useFormDataUpdateMutation = () => {
     return {
         ...mutation,
         mutate: (variables, options) => {
-            const { formUuid, id, ...submissionData } = variables;
+            const { formUuid, id: rawId, ...submissionData } = variables;
+            // Decode Relay global ID → integer PK expected by the backend
+            const decodedId = parseInt(decodeRelayId(rawId), 10);
             const payload = {
-                id,
+                id: Number.isNaN(decodedId) ? rawId : decodedId,
                 data: typeof submissionData === 'string' ? submissionData : JSON.stringify(submissionData),
             };
             mutation.mutate(payload, options);
@@ -284,7 +332,11 @@ export const useFormDataUpdateMutation = () => {
 
 /**
  * Delete a form submission on the backend.
- * variables: { formUuid: string, id: string (submission uuid) }
+ * variables: {
+ *   formUuid: string,   – UUID from URL params (not used by backend)
+ *   relayId: string,    – Relay global ID of the FormSubmission (base64)
+ * }
+ * The backend DeleteFormSubmissionMutation.Input.id expects the integer PK.
  */
 export const useFormDataDeleteMutation = () => {
     const mutation = useGraphqlMutation(DELETE_FORM_SUBMISSION, {
@@ -294,7 +346,10 @@ export const useFormDataDeleteMutation = () => {
     return {
         ...mutation,
         mutate: (variables, options) => {
-            mutation.mutate({ id: variables.id || variables.uuid }, options);
+            // Prefer explicit relayId; fall back to id (may be UUID – will fail at backend)
+            const rawId = variables.relayId || variables.id || variables.uuid;
+            const decodedId = parseInt(decodeRelayId(rawId), 10);
+            mutation.mutate({ id: Number.isNaN(decodedId) ? rawId : decodedId }, options);
         }
     };
 };

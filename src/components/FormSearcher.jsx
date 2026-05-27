@@ -76,7 +76,9 @@ const FormSearcher = (props) => {
 
     const onDeleteConfirm = async (isConfirmed) => {
         if (isConfirmed && formToDelete) {
-            await deleteMutation.mutate({ uuid: formToDelete.uuid });
+            // Pass relay global ID (formToDelete.id) so the hook can decode it
+            // to the integer PK expected by the backend.
+            await deleteMutation.mutate({ id: formToDelete.id, uuid: formToDelete.uuid });
             refetch();
         }
         setFormToDelete(null);
