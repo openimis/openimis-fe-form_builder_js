@@ -1,8 +1,8 @@
-import { Add as AddIcon, Delete as DeleteIcon, Edit as EditIcon, Visibility as ViewIcon } from "@mui/icons-material";
 import { Button, Tooltip } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import {
     ConfirmDialog,
+    GetIconComponent,
     Searcher,
     combine,
     historyPush,
@@ -13,6 +13,11 @@ import {
 import { useCallback, useState } from "react";
 import { useFormDefinitionDeleteMutation, useFormDefinitionsQuery } from "../hooks";
 import FormFilters from "./FormFilters";
+
+const AddIcon = GetIconComponent("Add");
+const DeleteIcon = GetIconComponent("Delete");
+const EditIcon = GetIconComponent("Edit");
+const ViewIcon = GetIconComponent("Visibility");
 
 const StyledHorizontalButtonContainer = styled("div")(({ theme }) => ({
     display: "flex",

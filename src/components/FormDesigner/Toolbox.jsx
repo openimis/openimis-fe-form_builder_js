@@ -1,11 +1,13 @@
 import { useDraggable } from "@dnd-kit/core";
-import CheckBoxIcon from "@mui/icons-material/CheckBox";
-import DateRangeIcon from "@mui/icons-material/DateRange";
-import ListIcon from "@mui/icons-material/List";
-import NumbersIcon from "@mui/icons-material/Numbers";
-import TextFieldsIcon from "@mui/icons-material/TextFields";
+import { GetIconComponent } from "@openimis/fe-core";
 import { List, ListItem, ListItemIcon, ListItemText } from "@mui/material";
 import { FIELD_TYPES } from "../../constants";
+
+const CheckBoxIcon = GetIconComponent("CheckBox");
+const DateRangeIcon = GetIconComponent("DateRange");
+const ListIcon = GetIconComponent("List");
+const NumbersIcon = GetIconComponent("Numbers");
+const TextFieldsIcon = GetIconComponent("TextFields");
 
 const DraggableItem = ({ type, label, icon }) => {
     const { attributes, listeners, setNodeRef, transform } = useDraggable({

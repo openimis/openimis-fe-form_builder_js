@@ -1,7 +1,7 @@
-import { Add as AddIcon } from "@mui/icons-material";
 import { Fab } from "@mui/material";
 import { styled } from "@mui/material/styles";
 import {
+    GetIconComponent,
     combine,
     historyPush,
     useModulesManager,
@@ -11,6 +11,8 @@ import {
 } from "@openimis/fe-core";
 import { useSelector } from "react-redux";
 import FormSearcher from "./FormSearcher";
+
+const AddIcon = GetIconComponent("Add");
 
 const StyledPage = styled("div")(({ theme }) => ({
     ...theme.page ?? {},

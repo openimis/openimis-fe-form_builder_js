@@ -1,8 +1,6 @@
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import SaveIcon from "@mui/icons-material/Save";
 import { Button, Fab, Grid, Paper, Typography } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { combine, historyPush, useModulesManager, useTranslations, withHistory } from "@openimis/fe-core";
+import { GetIconComponent, combine, historyPush, useModulesManager, useTranslations, withHistory } from "@openimis/fe-core";
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import {
@@ -12,6 +10,9 @@ import {
 } from "../../hooks";
 import FormDesignPanel from "./FormDesignPanel";
 import FormMetadataPanel from "./FormMetadataPanel";
+
+const ArrowBackIcon = GetIconComponent("ArrowBack");
+const SaveIcon = GetIconComponent("Save");
 
 const StyledPage = styled("div")(({ theme }) => ({
     ...theme.page ?? {},

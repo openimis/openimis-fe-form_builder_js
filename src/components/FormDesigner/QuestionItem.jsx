@@ -1,8 +1,10 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import DeleteIcon from "@mui/icons-material/Delete";
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
+import { GetIconComponent } from "@openimis/fe-core";
 import { Grid, IconButton, Paper, Typography } from "@mui/material";
+
+const DeleteIcon = GetIconComponent("Delete");
+const DragIndicatorIcon = GetIconComponent("DragIndicator");
 
 const QuestionItem = ({ id, field, onSelect, onDelete, isSelected }) => {
     const {
